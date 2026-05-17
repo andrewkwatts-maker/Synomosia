@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "synomosia"
@@ -51,9 +51,10 @@ Homepage = "https://github.com/andrewkwatts-maker/Synomosia"
 Repository = "https://github.com/andrewkwatts-maker/Synomosia"
 Issues = "https://github.com/andrewkwatts-maker/Synomosia/issues"
 
+[tool.maturin]
+python-source = "src"
+module-name = "synomosia._core"
+features = ["pyo3/extension-module"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/synomosia"]
-artifacts = ["src/synomosia/_data/*.db.gz"]

@@ -9,6 +9,36 @@ Quick start:
 """
 from __future__ import annotations
 
+try:
+    from ._core import extract_keywords, score_article
+    _RUST_CORE = True
+except ImportError:
+    _RUST_CORE = False
+
+    def extract_keywords(text: str, stop_words: list, top_n: int) -> list:
+        stop = set(stop_words)
+        counts: dict = {}
+        for word in text.split():
+            w = "".join(c for c in word if c.isalpha()).lower()
+            if len(w) >= 3 and w not in stop:
+                counts[w] = counts.get(w, 0) + 1
+        pairs = sorted(counts.items(), key=lambda x: -x[1])
+        return pairs[:top_n]
+
+    def score_article(title: str, content: str, query: str) -> float:
+        q = query.lower()
+        t = title.lower()
+        if not q:
+            return 0.0
+        score = 0.0
+        if t.startswith(q):
+            score += 1000.0
+        elif q in t:
+            score += 500.0
+        if q in content.lower():
+            score += 100.0
+        return score
+
 from ._query import (
     Get,
     Search,
@@ -120,4 +150,5 @@ __all__ = [
     # LLM
     "Categorize",
     "DailyReport",
+    "_RUST_CORE",
 ]
