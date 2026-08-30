@@ -42,6 +42,7 @@ except ImportError:
 from ._query import (
     Get,
     Search,
+    Refresh,
     ByCategory,
     ByMythology,
     ByType,
@@ -109,7 +110,7 @@ def GetDocument(query: str) -> dict | None:
     return _typed(query, "document")
 
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     # Core query

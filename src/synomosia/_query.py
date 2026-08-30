@@ -8,13 +8,40 @@ from eyecore import EntityDB
 _DATA_DIR = Path(__file__).parent / "_data"
 _BASE = _DATA_DIR / "synomosia.db.gz"
 
+# Baked snapshot hosted as a GitHub Release asset, downloaded lazily on first
+# query. The `mythology` column stores the conspiracy *category*.
+_DATA_URL = (
+    "https://github.com/andrewkwatts-maker/Synomosia/releases/download/"
+    "data-v1.1.0/synomosia.db.gz"
+)
+
+CONSPIRACY_COLLECTIONS = [
+    "theories", "figures", "organizations", "events", "documents", "concepts",
+]
+
+_COLLECTION_TYPES = {
+    "theories": "theory", "figures": "figure", "organizations": "organization",
+    "events": "event", "documents": "document", "concepts": "concept",
+}
+
 
 class _SynomosiaDB(EntityDB):
     def __init__(self) -> None:
-        super().__init__("synomosia", _BASE, None)
+        super().__init__("synomosia", _BASE, None, remote_url=_DATA_URL)
 
 
 _db = _SynomosiaDB()
+
+
+def Refresh(api_key: str = "") -> int:
+    """Merge Firestore changes since the bake. No conspiracy upstream exists
+    yet, so until one is configured this is a fast no-op returning 0."""
+    import os
+
+    project = os.getenv("AUGUR_PROJECT", "")
+    if not project:
+        return 0  # no upstream project yet — the baked seed is authoritative
+    return _db.sync_deltas(project, CONSPIRACY_COLLECTIONS, _COLLECTION_TYPES, api_key)
 
 
 # ── Public thin wrappers ──────────────────────────────────────────────────────
@@ -35,9 +62,10 @@ def ByMythology(mythology: str, limit: int = 500) -> list[dict]:
     return _db.by_mythology(mythology, limit)
 
 
-# ByCategory and ByEra are aliases pointing to ByMythology
-ByCategory = ByMythology
-ByEra = ByMythology
+def ByCategory(category: str, limit: int = 500) -> list[dict]:
+    """All entities in a conspiracy category (stored in the shared
+    `mythology` column of the suite schema)."""
+    return _db.by_mythology(category, limit)
 
 
 def ByType(entity_type: str, mythology: str | None = None, limit: int = 500) -> list[dict]:

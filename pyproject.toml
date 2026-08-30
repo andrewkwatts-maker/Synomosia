@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "synomosia"
-version = "1.0.0"
+version = "1.1.0"
 description = "Conspiracy theories, hidden histories, and suppressed knowledge"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,7 +28,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "eyecore[feed]>=1.0.0",
+    "eyecore[feed]>=1.1.0",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +55,7 @@ Issues = "https://github.com/andrewkwatts-maker/Synomosia/issues"
 python-source = "src"
 module-name = "synomosia._core"
 features = ["pyo3/extension-module"]
+exclude = ["src/synomosia/_data/*.db.gz", "src/synomosia/_data/*.db"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

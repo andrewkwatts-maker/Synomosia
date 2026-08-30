@@ -15,3 +15,8 @@ venv/
 serviceAccountKey.json
 credentials*.json
 *-credentials.json
+
+# Baked data ships as a GitHub Release asset
+src/synomosia/_data/*.db.gz
+src/synomosia/_data/*.db
+

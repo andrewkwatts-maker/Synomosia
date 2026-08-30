@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Augur scraper CLI.
+"""Synomosia conspiracy scraper CLI.
 
 Usage:
-    python scripts/scrape.py run                    # scrape all sources
-    python scripts/scrape.py add <url>              # add source (auto-detects feed)
-    python scripts/scrape.py add <url> --name BBC --category world
-    python scripts/scrape.py remove <url>           # remove source
+    python scripts/scrape.py run [--llm]            # scrape all sources, optionally LLM-categorize
+    python scripts/scrape.py reddit                 # scrape Reddit only
+    python scripts/scrape.py chan                   # scrape 4chan only
+    python scripts/scrape.py feeds                  # scrape RSS feeds only
+    python scripts/scrape.py add-feed <url> [--name NAME] [--category CAT]
+    python scripts/scrape.py add-sub <subreddit>
     python scripts/scrape.py list                   # list configured sources
-    python scripts/scrape.py compress               # compress old daily DBs
-    python scripts/scrape.py days                   # list available day archives
-    python scripts/scrape.py report [--date DATE] [--no-llm]   # generate topic reports
-    python scripts/scrape.py reports [--date DATE]             # show existing reports
+    python scripts/scrape.py report [--date DATE]   # generate LLM daily report
+    python scripts/scrape.py compress [--keep N]
+    python scripts/scrape.py days
 """
 from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -23,40 +25,162 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 def cmd_run(args) -> None:
-    from augur._scraper import scrape_all
+    from synomosia._scraper import scrape_all
+    from synomosia._store import today_db, insert_articles
+
     print("Scraping all sources...")
     results = scrape_all(verbose=True)
     total = sum(v for v in results.values() if v >= 0)
-    print(f"\nTotal new articles: {total}")
+    print(f"\nSource totals: {results}")
+    print(f"Total new articles: {total}")
+
+    if args.llm:
+        print("\nRunning LLM categorization...")
+        from synomosia._store import open_day
+        from synomosia._llm_categorizer import categorize_batch
+        import json
+
+        db = open_day(date.today().isoformat())
+        rows = db.execute("SELECT * FROM articles ORDER BY published DESC").fetchall()
+        articles = []
+        for r in rows:
+            try:
+                a = json.loads(r["data"])
+            except Exception:
+                a = dict(r)
+            articles.append(a)
+
+        if not articles:
+            print("No articles to categorize.")
+            return
+
+        enriched = categorize_batch(articles, verbose=True)
+        # Update categories in DB
+        updated = 0
+        for a in enriched:
+            if a.get("category"):
+                db.execute(
+                    "UPDATE articles SET category=? WHERE id=?",
+                    (a["category"], a["id"]),
+                )
+                updated += 1
+        db.commit()
+        db.close()
+        print(f"\nUpdated {updated} article categories.")
 
 
-def cmd_add(args) -> None:
-    from augur._scraper import add_source
-    source = add_source(args.url, name=args.name or "", category=args.category)
-    print(f"Added: {source['name']} -> {source['url']}")
+def cmd_reddit(args) -> None:
+    from synomosia._scraper import scrape_reddit
+    from synomosia._store import today_db, insert_articles
+
+    print("Scraping Reddit...")
+    articles = scrape_reddit(verbose=True)
+    db = today_db()
+    new = insert_articles(db, articles)
+    db.close()
+    print(f"\nDone: {new} new articles ({len(articles)} fetched)")
 
 
-def cmd_remove(args) -> None:
-    from augur._scraper import remove_source
-    if remove_source(args.url):
-        print(f"Removed: {args.url}")
-    else:
-        print(f"Not found: {args.url}")
-        sys.exit(1)
+def cmd_chan(args) -> None:
+    from synomosia._scraper import scrape_4chan
+    from synomosia._store import today_db, insert_articles
+
+    print("Scraping 4chan...")
+    articles = scrape_4chan(verbose=True)
+    db = today_db()
+    new = insert_articles(db, articles)
+    db.close()
+    print(f"\nDone: {new} new articles ({len(articles)} fetched)")
+
+
+def cmd_feeds(args) -> None:
+    from synomosia._scraper import scrape_feeds
+    from synomosia._store import today_db, insert_articles
+
+    print("Scraping RSS feeds...")
+    articles = scrape_feeds(verbose=True)
+    db = today_db()
+    new = insert_articles(db, articles)
+    db.close()
+    print(f"\nDone: {new} new articles ({len(articles)} fetched)")
+
+
+def cmd_add_feed(args) -> None:
+    from synomosia._scraper import add_feed
+
+    entry = add_feed(args.url, name=args.name or "", category=args.category)
+    print(f"Added feed: {entry['name']} -> {entry['url']} [{entry['category']}]")
+
+
+def cmd_add_sub(args) -> None:
+    from synomosia._scraper import add_reddit_sub
+
+    sub = args.subreddit.lstrip("r/").lstrip("/")
+    add_reddit_sub(sub)
+    print(f"Added subreddit: r/{sub}")
 
 
 def cmd_list(args) -> None:
-    from augur._scraper import load_sources
+    from synomosia._scraper import load_sources
+
     sources = load_sources()
-    if not sources:
-        print("No sources configured.")
-        return
-    for s in sources:
-        print(f"  [{s.get('category', 'general')}] {s.get('name', '')} -> {s['url']}")
+
+    reddit_subs = sources.get("reddit_subs", [])
+    chan_boards = sources.get("chan_boards", [])
+    feeds = sources.get("feeds", [])
+
+    print(f"\nReddit subreddits ({len(reddit_subs)}):")
+    for sub in reddit_subs:
+        print(f"  r/{sub}")
+
+    print(f"\n4chan boards ({len(chan_boards)}):")
+    for board in chan_boards:
+        print(f"  /{board}/")
+
+    print(f"\nRSS/Atom feeds ({len(feeds)}):")
+    for f in feeds:
+        print(f"  [{f.get('category', 'conspiracy')}] {f.get('name', '')} -> {f['url']}")
+
+
+def cmd_report(args) -> None:
+    from synomosia._store import open_day, available_days
+    from synomosia._llm_categorizer import generate_daily_report
+    import json
+
+    target_date = args.date or date.today().isoformat()
+
+    try:
+        db = open_day(target_date)
+    except FileNotFoundError:
+        days = available_days()
+        if not days:
+            print(f"No data available. Run: python scripts/scrape.py run")
+        else:
+            print(f"No data for {target_date}. Available days: {', '.join(days[:5])}")
+        sys.exit(1)
+
+    rows = db.execute("SELECT * FROM articles ORDER BY published DESC").fetchall()
+    articles = []
+    for r in rows:
+        try:
+            a = json.loads(r["data"])
+        except Exception:
+            a = dict(r)
+        articles.append(a)
+    db.close()
+
+    if not articles:
+        print(f"No articles found for {target_date}.")
+        sys.exit(1)
+
+    print(f"Generating report for {target_date} ({len(articles)} articles)...")
+    report = generate_daily_report(articles, target_date)
+    print("\n" + report)
 
 
 def cmd_compress(args) -> None:
-    from augur._store import compress_old_days
+    from synomosia._store import compress_old_days
+
     compressed = compress_old_days(keep_uncompressed=args.keep)
     if compressed:
         print(f"Compressed: {', '.join(compressed)}")
@@ -65,7 +189,8 @@ def cmd_compress(args) -> None:
 
 
 def cmd_days(args) -> None:
-    from augur._store import available_days
+    from synomosia._store import available_days
+
     days = available_days()
     if not days:
         print("No data available.")
@@ -74,95 +199,30 @@ def cmd_days(args) -> None:
         print(f"  {d}")
 
 
-def cmd_report(args) -> None:
-    """Generate topic reports for a given date using LLM clustering."""
-    from augur._report import generate_daily_reports
-    target = args.date or None
-    use_llm = not args.no_llm
-
-    if target:
-        print(f"Generating topic reports for {target}...")
-    else:
-        from datetime import date
-        target = date.today().isoformat()
-        print(f"Generating topic reports for today ({target})...")
-
-    reports = generate_daily_reports(
-        target_date=target,
-        use_llm=use_llm,
-        verbose=True,
-    )
-
-    if not reports:
-        print("No articles found for that date.")
-        return
-
-    print(f"\nGenerated {len(reports)} topic report(s):\n")
-    for r in reports:
-        print(f"  [{r['article_count']} articles] {r['topic']}")
-        # Print a brief excerpt of the summary (first 200 chars)
-        summary = r.get("summary", "")
-        if summary:
-            excerpt = summary[:200].replace("\n", " ")
-            if len(summary) > 200:
-                excerpt += "..."
-            print(f"    {excerpt}")
-        print()
-
-
-def cmd_reports(args) -> None:
-    """Show existing topic reports for a given date."""
-    from augur._query import GetReports
-    target = args.date or None
-
-    if target:
-        print(f"Topic reports for {target}:\n")
-    else:
-        from datetime import date
-        target = date.today().isoformat()
-        print(f"Topic reports for today ({target}):\n")
-
-    reports = GetReports(target)
-
-    if not reports:
-        print("No reports found. Run: python scripts/scrape.py report")
-        return
-
-    for r in reports:
-        print(f"  [{r.get('article_count', 0)} articles] {r.get('topic', 'Unknown')}")
-        summary = r.get("summary", "")
-        if summary:
-            excerpt = summary[:200].replace("\n", " ")
-            if len(summary) > 200:
-                excerpt += "..."
-            print(f"    {excerpt}")
-        links = r.get("links", [])
-        if isinstance(links, list) and links:
-            print(f"    Top links:")
-            for link in links[:3]:
-                title = link.get("title", "")
-                url = link.get("url", "")
-                if title and url:
-                    print(f"      - {title}")
-                    print(f"        {url}")
-        print()
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(description="augur news scraper")
+    parser = argparse.ArgumentParser(description="apocrypha conspiracy scraper")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("run", help="Scrape all configured sources")
+    p_run = sub.add_parser("run", help="Scrape all sources (Reddit, 4chan, feeds)")
+    p_run.add_argument("--llm", action="store_true", help="LLM-categorize scraped articles")
 
-    p_add = sub.add_parser("add", help="Add a news source")
-    p_add.add_argument("url", help="RSS feed URL or website URL")
-    p_add.add_argument("--name", default="", help="Display name")
-    p_add.add_argument("--category", default="general", help="Category tag")
+    sub.add_parser("reddit", help="Scrape Reddit subreddits only")
+    sub.add_parser("chan", help="Scrape 4chan boards only")
+    sub.add_parser("feeds", help="Scrape RSS/Atom feeds only")
 
-    p_rm = sub.add_parser("remove", help="Remove a source")
-    p_rm.add_argument("url")
+    p_add_feed = sub.add_parser("add-feed", help="Add an RSS/Atom feed")
+    p_add_feed.add_argument("url", help="Feed URL")
+    p_add_feed.add_argument("--name", default="", help="Display name")
+    p_add_feed.add_argument("--category", default="conspiracy", help="Category tag")
+
+    p_add_sub = sub.add_parser("add-sub", help="Add a Reddit subreddit")
+    p_add_sub.add_argument("subreddit", help="Subreddit name (with or without r/ prefix)")
 
     sub.add_parser("list", help="List configured sources")
+
+    p_report = sub.add_parser("report", help="Generate LLM daily conspiracy report")
+    p_report.add_argument("--date", default=None, metavar="YYYY-MM-DD",
+                          help="Date to report on (default: today)")
 
     p_comp = sub.add_parser("compress", help="Compress old daily DBs")
     p_comp.add_argument("--keep", type=int, default=2,
@@ -170,26 +230,18 @@ def main() -> None:
 
     sub.add_parser("days", help="List available day archives")
 
-    p_report = sub.add_parser("report", help="Generate topic reports for a date")
-    p_report.add_argument("--date", default=None,
-                          help="Date to generate reports for (YYYY-MM-DD, default: today)")
-    p_report.add_argument("--no-llm", action="store_true",
-                          help="Use keyword clustering instead of LLM")
-
-    p_reports = sub.add_parser("reports", help="Show existing topic reports for a date")
-    p_reports.add_argument("--date", default=None,
-                           help="Date to show reports for (YYYY-MM-DD, default: today)")
-
     args = parser.parse_args()
     {
         "run": cmd_run,
-        "add": cmd_add,
-        "remove": cmd_remove,
+        "reddit": cmd_reddit,
+        "chan": cmd_chan,
+        "feeds": cmd_feeds,
+        "add-feed": cmd_add_feed,
+        "add-sub": cmd_add_sub,
         "list": cmd_list,
+        "report": cmd_report,
         "compress": cmd_compress,
         "days": cmd_days,
-        "report": cmd_report,
-        "reports": cmd_reports,
     }[args.command](args)
 
 
