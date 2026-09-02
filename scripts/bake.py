@@ -27,8 +27,18 @@ except ImportError:
 ROOT = Path(__file__).parent.parent
 DATA_OUT = ROOT / "src" / "synomosia" / "_data" / "synomosia.db"
 
-DEFAULT_PROJECT = os.getenv("AUGUR_PROJECT", "")
+# The suite shares one Firestore project; AUGUR_PROJECT overrides it.
+# ENV_PROJECT stays empty when unset so a bare `bake.py` keeps defaulting to
+# the committed seed data rather than silently hitting the network.
+ENV_PROJECT = os.getenv("AUGUR_PROJECT", "")
+DEFAULT_PROJECT = ENV_PROJECT or "eyesofazrael"
 DEFAULT_API_KEY = os.getenv("AUGUR_API_KEY", os.getenv("FIREBASE_API_KEY", ""))
+
+# Conspiracy lives under `con_` in the shared project, because `events`,
+# `figures` and `concepts` are already live mythology collections there.
+# Local seed directories keep the bare names. Must match
+# src/synomosia/_query.py's CONSPIRACY_COLLECTIONS.
+REMOTE_PREFIX = "con_"
 
 # Collection -> entity type. Must match synomosia's public API
 # (GetTheory / GetFigure / GetOrganization / GetEvent / GetDocument / GetConcept).
@@ -238,8 +248,9 @@ def bake_from_local(source_dir: Path, db_path: Path) -> None:
 def bake_from_firebase(db_path: Path, project: str, api_key: str) -> None:
     if not project:
         sys.exit(
-            "No conspiracy Firestore project exists yet. Bake from the "
-            "committed seed data instead:\n    python scripts/bake.py --source seed_data"
+            "No Firestore project given. Pass --project, set AUGUR_PROJECT, or "
+            "bake from the committed seed data instead:\n"
+            "    python scripts/bake.py --source seed_data"
         )
     try:
         import requests
@@ -254,7 +265,8 @@ def bake_from_firebase(db_path: Path, project: str, api_key: str) -> None:
     total = 0
     all_rows: list[tuple] = []
     for col_name, entity_type in COLLECTIONS.items():
-        url = f"{base}/{col_name}"
+        remote_name = REMOTE_PREFIX + col_name
+        url = f"{base}/{remote_name}"
         docs: list[dict] = []
         token: str | None = None
         while True:
@@ -303,8 +315,9 @@ def main() -> None:
     )
     parser.add_argument("--source", metavar="DIR",
                         help="Local JSON directory (default source: seed_data)")
-    parser.add_argument("--project", default=DEFAULT_PROJECT, metavar="ID",
-                        help="Firestore project id (env AUGUR_PROJECT)")
+    parser.add_argument("--project", default=ENV_PROJECT, metavar="ID",
+                        help=f"Firestore project id (env AUGUR_PROJECT, "
+                             f"default {DEFAULT_PROJECT})")
     parser.add_argument("--api-key", default=DEFAULT_API_KEY, metavar="KEY")
     parser.add_argument("--out", default=str(DATA_OUT), metavar="PATH")
     args = parser.parse_args()
@@ -314,7 +327,7 @@ def main() -> None:
     elif (ROOT / "seed_data").exists() and not args.project:
         bake_from_local(ROOT / "seed_data", out)
     else:
-        bake_from_firebase(out, args.project, args.api_key)
+        bake_from_firebase(out, args.project or DEFAULT_PROJECT, args.api_key)
 
 
 if __name__ == "__main__":

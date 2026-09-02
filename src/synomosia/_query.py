@@ -15,32 +15,54 @@ _DATA_URL = (
     "data-v1.1.0/synomosia.db.gz"
 )
 
+# SHA-256 of the release asset above, verified before the download is cached.
+_DATA_SHA256 = "419cfe56e078498f2d7ea5c3109adfaba6611aec24c2b479fc799637268d36b0"
+
+# The whole suite shares one Firestore project so that one sign-in works
+# across every domain; collection names are therefore namespaced per domain.
+_DEFAULT_PROJECT = "eyesofazrael"
+
+# Conspiracy collections carry the `con_` prefix. This is load-bearing, not
+# cosmetic: `events`, `figures` and `concepts` are live mythology collections
+# in the same project. Querying them unprefixed would pull azrael's deities
+# and their events straight into the conspiracy database. See
+# EyesOfAzrael/docs/PLAN-MULTIDOMAIN.md §2.
 CONSPIRACY_COLLECTIONS = [
-    "theories", "figures", "organizations", "events", "documents", "concepts",
+    "con_theories", "con_figures", "con_organizations", "con_events",
+    "con_documents", "con_concepts",
 ]
 
+# Remote collection -> local entity type. The prefix is a Firestore namespace
+# only; the baked rows and every query use the bare type.
 _COLLECTION_TYPES = {
-    "theories": "theory", "figures": "figure", "organizations": "organization",
-    "events": "event", "documents": "document", "concepts": "concept",
+    "con_theories": "theory", "con_figures": "figure",
+    "con_organizations": "organization", "con_events": "event",
+    "con_documents": "document", "con_concepts": "concept",
 }
 
 
 class _SynomosiaDB(EntityDB):
     def __init__(self) -> None:
-        super().__init__("synomosia", _BASE, None, remote_url=_DATA_URL)
+        super().__init__(
+            "synomosia", _BASE, None,
+            remote_url=_DATA_URL,
+            remote_sha256=_DATA_SHA256,
+        )
 
 
 _db = _SynomosiaDB()
 
 
 def Refresh(api_key: str = "") -> int:
-    """Merge Firestore changes since the bake. No conspiracy upstream exists
-    yet, so until one is configured this is a fast no-op returning 0."""
+    """Pull entities changed in Firestore since the bake (or last Refresh)
+    and merge them into the local database. Returns entities applied.
+
+    Reads the shared `eyesofazrael` project by default. Set `AUGUR_PROJECT` to
+    point conspiracy at an isolated project instead.
+    """
     import os
 
-    project = os.getenv("AUGUR_PROJECT", "")
-    if not project:
-        return 0  # no upstream project yet — the baked seed is authoritative
+    project = os.getenv("AUGUR_PROJECT") or _DEFAULT_PROJECT
     return _db.sync_deltas(project, CONSPIRACY_COLLECTIONS, _COLLECTION_TYPES, api_key)
 
 
