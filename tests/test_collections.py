@@ -2,7 +2,7 @@
 
 synomosia syncs deltas out of the shared `eyesofazrael` Firestore project,
 which already holds azrael's mythology documents under `events`, `figures` and
-`concepts`. Dropping the `con_` prefix from any collection would not fail —
+`concepts`. Dropping the `con_` prefix from any collection would not fail --
 it would quietly merge mythology deities and their events into the conspiracy
 database on the next Refresh(). That is the regression this file guards.
 """
@@ -46,7 +46,7 @@ def test_collection_types_cover_every_collection():
 
 
 def test_collection_types_map_onto_the_local_entity_types():
-    """The prefix is a Firestore namespace only — baked rows and queries use
+    """The prefix is a Firestore namespace only -- baked rows and queries use
     the bare type, so a delta must land under the bare type too."""
     assert _COLLECTION_TYPES == {
         "con_theories": "theory",
@@ -70,7 +70,7 @@ def test_bake_script_targets_the_same_prefixed_collections():
     assert "REMOTE_PREFIX + col_name" in src
 
 
-# ── the project default ───────────────────────────────────────────────────────
+# -- the project default -------------------------------------------------------
 
 def test_default_project_is_the_shared_one():
     assert _DEFAULT_PROJECT == "eyesofazrael"

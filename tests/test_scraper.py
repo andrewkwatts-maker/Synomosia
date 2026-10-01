@@ -1,4 +1,4 @@
-"""Unit tests for synomosia._scraper — network-free, import-free variants."""
+"""Unit tests for synomosia._scraper -- network-free, import-free variants."""
 import sys
 from unittest.mock import patch, MagicMock
 
@@ -14,7 +14,7 @@ from synomosia._scraper import (
 
 
 # ---------------------------------------------------------------------------
-# load_sources — default behaviour (no sources.json on disk)
+# load_sources -- default behaviour (no sources.json on disk)
 # ---------------------------------------------------------------------------
 
 def test_load_sources_default():
@@ -76,7 +76,7 @@ def test_load_sources_from_file():
 
 
 # ---------------------------------------------------------------------------
-# scrape_4chan — network unavailable
+# scrape_4chan -- network unavailable
 # ---------------------------------------------------------------------------
 
 def test_scrape_4chan_requests_not_installed():
@@ -144,7 +144,7 @@ def test_scrape_4chan_parses_valid_response():
 
 
 # ---------------------------------------------------------------------------
-# scrape_reddit — praw not installed / env vars missing
+# scrape_reddit -- praw not installed / env vars missing
 # ---------------------------------------------------------------------------
 
 def test_scrape_reddit_no_praw():
@@ -173,7 +173,7 @@ def test_scrape_reddit_returns_list():
 
 
 # ---------------------------------------------------------------------------
-# scrape_feeds — feedparser not installed
+# scrape_feeds -- feedparser not installed
 # ---------------------------------------------------------------------------
 
 def test_scrape_feeds_no_feedparser():

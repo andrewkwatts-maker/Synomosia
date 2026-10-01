@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_entity_topics_topic  ON entity_topics(topic_id);
 """
 
 
-# ── Row helpers ───────────────────────────────────────────────────────────────
+# -- Row helpers ---------------------------------------------------------------
 
 def _str_list(val) -> str:
     if not val:
@@ -137,7 +137,7 @@ def _entity_row(e: dict, fallback_type: str) -> tuple:
             json.dumps(e, ensure_ascii=False))
 
 
-# ── DB setup / topic graph ────────────────────────────────────────────────────
+# -- DB setup / topic graph ----------------------------------------------------
 
 def _init_db(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -200,7 +200,7 @@ def _stamp_generated_at(db: sqlite3.Connection) -> None:
              datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
 
 
-# ── Bake paths ────────────────────────────────────────────────────────────────
+# -- Bake paths ----------------------------------------------------------------
 
 def bake_from_local(source_dir: Path, db_path: Path) -> None:
     if not source_dir.exists():

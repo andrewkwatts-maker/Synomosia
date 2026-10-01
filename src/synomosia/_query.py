@@ -1,4 +1,4 @@
-"""Core query engine backed by a baked SQLite database — delegates to EntityDB."""
+"""Core query engine backed by a baked SQLite database -- delegates to EntityDB."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,7 +26,7 @@ _DEFAULT_PROJECT = "eyesofazrael"
 # cosmetic: `events`, `figures` and `concepts` are live mythology collections
 # in the same project. Querying them unprefixed would pull azrael's deities
 # and their events straight into the conspiracy database. See
-# EyesOfAzrael/docs/PLAN-MULTIDOMAIN.md §2.
+# EyesOfAzrael/docs/PLAN-MULTIDOMAIN.md sec. 2.
 CONSPIRACY_COLLECTIONS = [
     "con_theories", "con_figures", "con_organizations", "con_events",
     "con_documents", "con_concepts",
@@ -66,7 +66,7 @@ def Refresh(api_key: str = "") -> int:
     return _db.sync_deltas(project, CONSPIRACY_COLLECTIONS, _COLLECTION_TYPES, api_key)
 
 
-# ── Public thin wrappers ──────────────────────────────────────────────────────
+# -- Public thin wrappers ------------------------------------------------------
 
 def Get(name: str) -> dict | None:
     return _db.get(name)

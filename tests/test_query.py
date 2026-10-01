@@ -1,4 +1,4 @@
-"""Unit tests for synomosia._query — all queries run against an in-memory SQLite DB."""
+"""Unit tests for synomosia._query -- all queries run against an in-memory SQLite DB."""
 import pytest
 import synomosia
 from synomosia._query import (
@@ -16,7 +16,7 @@ from synomosia._query import (
 
 
 # ---------------------------------------------------------------------------
-# Get — exact / fuzzy name lookup
+# Get -- exact / fuzzy name lookup
 # ---------------------------------------------------------------------------
 
 def test_get_exact(patch_base):
@@ -345,7 +345,7 @@ def test_typed_helper_domain_fallback(patch_base):
 
 
 # ---------------------------------------------------------------------------
-# GetTopics and GetRelated (graph layer — empty in test DB)
+# GetTopics and GetRelated (graph layer -- empty in test DB)
 # ---------------------------------------------------------------------------
 
 def test_gettopics_no_topics(patch_base):
