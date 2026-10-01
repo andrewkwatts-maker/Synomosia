@@ -1,11 +1,36 @@
-[package]
-name = "synomosia-core"
-version = "1.1.0"
-edition = "2021"
+#====== Augur/Cargo.toml ======#
+# Workspace root for the Augur (synomosia) Rust stack.
+#
+# There is one member. It is still a workspace rather than a bare package
+# because Cargo only honours [profile.*] at the workspace root, and because the
+# previous layout put the crate at the repository root next to `src/synomosia`,
+# where `src/lib.rs` and the Python package fought over the same directory.
 
-[lib]
-name = "_core"
-crate-type = ["cdylib"]
+[workspace]
+resolver = "2"
+members = ["rust/augur_core"]
+# `dist/` holds packaging artifacts, including an unpacked source copy.
+# Never let a glob pick it up as a workspace member.
+exclude = ["dist"]
 
-[dependencies]
-pyo3 = { version = "0.28", features = ["extension-module"] }
+# The hot paths here are small functions -- the entity binary search, the
+# tokenizer's per-char predicates, the scorer -- called once per character or
+# once per article inside tight loops that cross module boundaries. Without
+# cross-crate inlining they stay real calls.
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+
+[profile.bench]
+inherits = "release"
+lto = "thin"
+
+# The parity tests sweep every Unicode scalar and every one of the 2,231 HTML
+# entities. That is unusably slow unoptimised, but debug_assert! and overflow
+# checks must stay on, so optimise lightly here and fully in dependencies.
+[profile.test]
+opt-level = 1
+
+[profile.test.package."*"]
+opt-level = 3

@@ -1,17 +1,22 @@
-"""Conspiracy content scraper — Reddit, 4chan, RSS feeds."""
+"""Conspiracy content scraper -- Reddit, 4chan, RSS feeds.
+
+Fetching is Python: it waits on sockets, and PRAW and feedparser already own
+the protocol details. Everything done to the *bytes that come back* is Rust
+(see `augur_core`), because that part runs once per article and was three
+regex passes plus a SHA-256 per item.
+"""
 from __future__ import annotations
 
-import hashlib
-import html
 import json
-import re
+import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from time import mktime
 from urllib.parse import urlparse
 
 from eyecore import cache_dir
+
+from ._backend import article_id as _core_article_id, strip_html as _core_strip_html
 
 _SOURCES_FILE = cache_dir("synomosia") / "sources.json"
 
@@ -98,21 +103,37 @@ def remove_feed(url: str) -> bool:
     return False
 
 
+def _report_source_failure(source: str, exc: BaseException) -> None:
+    """Report a source that failed, always, on stderr.
+
+    Scraping many third-party sources means a broad `except` is the right
+    shape -- PRAW, requests and feedparser each raise their own hierarchies,
+    and one dead board must not lose the other six. What is not acceptable is
+    swallowing the failure, so this never returns quietly.
+    """
+    print(f"  {source}: FAILED ({type(exc).__name__}: {exc})", file=sys.stderr)
+
+
 def _article_id(url: str) -> str:
-    return hashlib.sha256(url.encode()).hexdigest()[:16]
+    """Stable article id: the first 16 hex digits of sha256(url).
+
+    Rust. This is the `articles` primary key, so the digest is pinned to
+    `hashlib`'s output by a parity test -- a divergence here would re-insert
+    every article already stored under the old id.
+    """
+    return _core_article_id(url)
 
 
 def _strip_html(text: str) -> str:
-    """Remove HTML tags and decode HTML entities from a string."""
+    """Remove HTML tags, decode entities and collapse whitespace.
+
+    Rust. Equivalent to the three-pass `re.sub` / `html.unescape` / `re.sub`
+    it replaces, down to the 2,231-entry entity table; see
+    tests/test_rust_core.py for the parity sweep that holds it there.
+    """
     if not text:
         return ""
-    # Remove HTML tags
-    text = re.sub(r"<[^>]+>", " ", text)
-    # Decode HTML entities
-    text = html.unescape(text)
-    # Collapse whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return _core_strip_html(text)
 
 
 def scrape_reddit(limit_per_sub: int = 25, verbose: bool = False) -> list[dict]:
@@ -201,8 +222,10 @@ def scrape_reddit(limit_per_sub: int = 25, verbose: bool = False) -> list[dict]:
             if verbose:
                 print(f"{count} posts")
         except Exception as exc:
-            if verbose:
-                print(f"ERROR: {exc}")
+            # One unreachable subreddit must not abort the other six, but the
+            # failure is reported unconditionally: gating it on `verbose` is
+            # how a permanently broken source stays invisible for months.
+            _report_source_failure(f"reddit/r/{sub}", exc)
 
     return articles
 
@@ -293,20 +316,24 @@ def scrape_4chan(limit_per_board: int = 20, verbose: bool = False) -> list[dict]
             time.sleep(1)
 
         except Exception as exc:
-            if verbose:
-                print(f"ERROR: {exc}")
+            _report_source_failure(f"4chan/{board}", exc)
 
     return articles
 
 
 def _parse_feed_time(entry) -> str:
-    """Parse published time from a feedparser entry."""
+    """Parse published time from a feedparser entry.
+
+    The exception list is deliberate rather than a bare `except Exception:
+    pass`: these are the three ways a malformed struct_time can fail to become
+    a datetime. Anything else is a bug in this function and must surface.
+    """
     if hasattr(entry, "published_parsed") and entry.published_parsed:
         try:
             return datetime.fromtimestamp(
                 mktime(entry.published_parsed), tz=timezone.utc
             ).isoformat()
-        except Exception:
+        except (ValueError, OverflowError, TypeError):
             pass
     return entry.get("published", "")
 
@@ -383,8 +410,7 @@ def scrape_feeds(verbose: bool = False) -> list[dict]:
                 print(f"{count} articles")
 
         except Exception as exc:
-            if verbose:
-                print(f"ERROR: {exc}")
+            _report_source_failure(label, exc)
 
     return articles
 

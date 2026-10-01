@@ -1,43 +1,45 @@
 """
-synomosia — Conspiracy theories, hidden histories, and suppressed knowledge.
+synomosia -- Conspiracy theories, hidden histories, and suppressed knowledge.
 
 Quick start:
     import synomosia
     theory = synomosia.GetTheory("Illuminati")
     results = synomosia.Search("shadow government")
     orgs = synomosia.ByCategory("government")
+
+The per-article hot path -- HTML normalisation, keyword extraction, article
+scoring and ranking, article ids, batch deduplication and the daily-report
+histogram -- is implemented in the `augur_core` Rust crate and reached through
+the compiled `synomosia._core` extension. There is no Python fallback: if the
+extension is missing, those functions raise :class:`RustBackendUnavailable`
+rather than quietly answering differently. Query, storage, scraping and LLM
+orchestration remain Python, because they wait on a socket or a disk.
+
+    import synomosia
+    synomosia.assert_rust_backend()   # fail fast if the backend is not live
+    synomosia.backend_report()        # or ask what is actually loaded
 """
 from __future__ import annotations
 
-try:
-    from ._core import extract_keywords, score_article
-    _RUST_CORE = True
-except ImportError:
-    _RUST_CORE = False
+from ._backend import (
+    PACKAGE_VERSION as __version__,
+    RustBackendUnavailable,
+    article_id,
+    assert_rust_backend,
+    backend_report,
+    extract_keywords,
+    first_occurrences,
+    is_rust_backend,
+    rank_articles,
+    score_article,
+    strip_html,
+    top_categories,
+    version_rust,
+    _HAS_RUST,
+)
 
-    def extract_keywords(text: str, stop_words: list, top_n: int) -> list:
-        stop = set(stop_words)
-        counts: dict = {}
-        for word in text.split():
-            w = "".join(c for c in word if c.isalpha()).lower()
-            if len(w) >= 3 and w not in stop:
-                counts[w] = counts.get(w, 0) + 1
-        pairs = sorted(counts.items(), key=lambda x: -x[1])
-        return pairs[:top_n]
-
-    def score_article(title: str, content: str, query: str) -> float:
-        q = query.lower()
-        t = title.lower()
-        if not q:
-            return 0.0
-        score = 0.0
-        if t.startswith(q):
-            score += 1000.0
-        elif q in t:
-            score += 500.0
-        if q in content.lower():
-            score += 100.0
-        return score
+#: Retained spelling of :data:`_HAS_RUST`; it was public in 1.0 and 1.1.
+_RUST_CORE = _HAS_RUST
 
 from ._query import (
     Get,
@@ -110,8 +112,6 @@ def GetDocument(query: str) -> dict | None:
     return _typed(query, "document")
 
 
-__version__ = "1.1.0"
-
 __all__ = [
     # Core query
     "Get",
@@ -122,6 +122,10 @@ __all__ = [
     "GetConcept",
     "GetDocument",
     "Search",
+    # Imported since 1.1.0 and reachable as `synomosia.Refresh`, but left out
+    # of __all__, so `from synomosia import *` and every documentation tool
+    # that reads __all__ missed the delta sync entirely.
+    "Refresh",
     "ByCategory",
     "ByMythology",
     "ByType",
@@ -151,5 +155,20 @@ __all__ = [
     # LLM
     "Categorize",
     "DailyReport",
+    # Rust core
+    "article_id",
+    "extract_keywords",
+    "first_occurrences",
+    "rank_articles",
+    "score_article",
+    "strip_html",
+    "top_categories",
+    # Backend health
+    "RustBackendUnavailable",
+    "assert_rust_backend",
+    "backend_report",
+    "is_rust_backend",
+    "version_rust",
+    "_HAS_RUST",
     "_RUST_CORE",
 ]

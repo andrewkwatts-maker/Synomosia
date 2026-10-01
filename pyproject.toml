@@ -52,9 +52,13 @@ Repository = "https://github.com/andrewkwatts-maker/Synomosia"
 Issues = "https://github.com/andrewkwatts-maker/Synomosia/issues"
 
 [tool.maturin]
+manifest-path = "rust/augur_core/Cargo.toml"
 python-source = "src"
 module-name = "synomosia._core"
-features = ["pyo3/extension-module"]
+# `extension-module` implies `python` and additionally stops PyO3 linking
+# libpython, which a wheel needs and a test binary cannot survive. Only the
+# wheel build sets it; `cargo test --features python` links and runs normally.
+features = ["extension-module"]
 exclude = ["src/synomosia/_data/*.db.gz", "src/synomosia/_data/*.db"]
 
 [tool.pytest.ini_options]

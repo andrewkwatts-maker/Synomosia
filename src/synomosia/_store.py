@@ -10,6 +10,8 @@ from pathlib import Path
 from eyecore import GRAPH_SCHEMA
 from eyecore._feed_store import data_dir as _feed_data_dir
 
+from ._backend import first_occurrences as _first_occurrences
+
 ARTICLES_SCHEMA = """
 CREATE TABLE IF NOT EXISTS articles (
     id        TEXT PRIMARY KEY,
@@ -111,9 +113,17 @@ def compress_old_days(keep_uncompressed: int = 2) -> list[str]:
 
 
 def insert_articles(db: sqlite3.Connection, articles: list[dict]) -> int:
-    """Bulk-insert articles, skipping duplicates. Returns new article count."""
+    """Bulk-insert articles, skipping duplicates. Returns new article count.
+
+    Within-batch duplicates are dropped in Rust before the loop starts. This
+    changes no result -- `INSERT OR IGNORE` already rejected them -- but
+    syndicated stories arrive from several feeds at once, and each repeat cost
+    two statements and a rowcount round trip.
+    """
+    keep = _first_occurrences([a["id"] for a in articles])
     new = 0
-    for a in articles:
+    for index in keep:
+        a = articles[index]
         cur = db.execute(
             "INSERT OR IGNORE INTO articles"
             "(id, url, title, source, category, published, summary, content, tags, data) "

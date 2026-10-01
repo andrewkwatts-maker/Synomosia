@@ -1,0 +1,41 @@
+#====== Augur/rust/augur_core/Cargo.toml ======#
+
+[package]
+name = "augur_core"
+# Bound to the Python package version by the handshake in
+# src/synomosia/_backend.py: `assert_rust_backend()` refuses to run when this
+# and `synomosia.__version__` disagree, which is how a stale extension left in
+# the tree gets caught. Keep in sync with pyproject.toml and __init__.py.
+version = "1.1.0"
+edition = "2021"
+license = "MIT"
+description = "Augur core: HTML normalisation, keyword extraction, article scoring and batch deduplication for the synomosia scraper."
+repository = "https://github.com/andrewkwatts-maker/Synomosia"
+rust-version = "1.74"
+
+[lib]
+name = "augur_core"
+# `lib` as well as `cdylib`: without it the crate cannot be unit-tested, and
+# `cargo test --workspace` would compile nothing.
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+# `python` enables the PyO3 bindings and links libpython, so a test binary
+# built with it can actually run. `extension-module` additionally tells PyO3
+# not to link libpython, which is required to build a wheel but makes any test
+# binary unloadable.
+#
+# These must stay separate. Fused into one feature, `cargo test --features
+# python` cannot link, so every #[cfg(test)] test under pyfacade/ is written
+# and then executed nowhere. Only the wheel build turns `extension-module` on
+# (see [tool.maturin] in pyproject.toml).
+python = ["dep:pyo3"]
+extension-module = ["python", "pyo3/extension-module"]
+
+[dependencies]
+# Article ids are `sha256(url).hexdigest()[:16]`, and that id is the SQLite
+# primary key of every stored article -- the digest must match Python's
+# hashlib byte for byte or previously scraped rows stop deduplicating.
+sha2 = "0.10"
+pyo3 = { version = "0.22", optional = true }

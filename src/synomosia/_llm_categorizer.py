@@ -1,7 +1,14 @@
-"""Use local LLM to categorize and enrich scraped conspiracy content."""
+"""Use local LLM to categorize and enrich scraped conspiracy content.
+
+The LLM calls stay in Python -- they are network round trips measured in
+seconds. The counting underneath the daily report is Rust: see
+:func:`generate_daily_report`.
+"""
 from __future__ import annotations
 
 from eyecore import LLMClient
+
+from ._backend import top_categories as _top_categories
 
 CONSPIRACY_CATEGORIES = [
     "government-surveillance",
@@ -21,6 +28,9 @@ CONSPIRACY_CATEGORIES = [
     "new-world-order",
     "other",
 ]
+
+#: How many category sections a daily report carries, busiest first.
+REPORT_SECTIONS = 5
 
 
 def categorize_article(article: dict) -> dict:
@@ -53,19 +63,22 @@ def generate_daily_report(articles: list[dict], date: str) -> str:
     """Generate a daily conspiracy report from all articles for a given date."""
     llm = LLMClient.get()
     if not llm.is_available():
-        return f"LLM not available — {len(articles)} articles scraped on {date}"
+        return f"LLM not available -- {len(articles)} articles scraped on {date}"
 
+    # Ranking used to build a second dict holding every article, purely to
+    # take len() of each bucket. Rust counts the category strings instead, and
+    # pins the tie order to first appearance so two runs over the same day
+    # produce the same sections in the same order. `or "other"` is new: a row
+    # whose category was explicitly None used to reach `cat.replace` and raise
+    # AttributeError.
+    names = [str(a.get("category") or "other") for a in articles]
     by_category: dict[str, list] = {}
-    for a in articles:
-        cat = a.get("category", "other")
-        by_category.setdefault(cat, []).append(a)
+    for name, article in zip(names, articles):
+        by_category.setdefault(name, []).append(article)
 
-    top_categories = sorted(
-        by_category.items(), key=lambda x: len(x[1]), reverse=True
-    )[:5]
-
-    report_parts = [f"# Conspiracy Intelligence Report — {date}\n"]
-    for cat, items in top_categories:
+    report_parts = [f"# Conspiracy Intelligence Report -- {date}\n"]
+    for cat, _count in _top_categories(names, REPORT_SECTIONS):
+        items = by_category[cat]
         section = llm.generate_report(
             items,
             cat,
