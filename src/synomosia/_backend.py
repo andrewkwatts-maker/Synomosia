@@ -25,7 +25,7 @@ import warnings
 # Canonical package version. `synomosia.__version__` re-exports it, and
 # `augur_core`'s Cargo.toml carries the same string; `assert_rust_backend`
 # compares the two. Bump all three together with the git tag.
-PACKAGE_VERSION = "1.1.0"
+PACKAGE_VERSION = "1.2.0"
 
 #: Accelerated callables the extension provides. Used both for the real import
 #: and to synthesise the raising stubs, so the two paths cannot drift apart.

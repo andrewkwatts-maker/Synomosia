@@ -6,7 +6,7 @@ name = "augur_core"
 # src/synomosia/_backend.py: `assert_rust_backend()` refuses to run when this
 # and `synomosia.__version__` disagree, which is how a stale extension left in
 # the tree gets caught. Keep in sync with pyproject.toml and __init__.py.
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 license = "MIT"
 description = "Augur core: HTML normalisation, keyword extraction, article scoring and batch deduplication for the synomosia scraper."
