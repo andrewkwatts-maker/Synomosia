@@ -46,7 +46,9 @@ def cmd_run(args) -> None:
         for r in rows:
             try:
                 a = json.loads(r["data"])
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
+                # A row written before the `data` column existed; the row
+                # itself is still usable. Anything else is a real fault.
                 a = dict(r)
             articles.append(a)
 
@@ -164,7 +166,7 @@ def cmd_report(args) -> None:
     for r in rows:
         try:
             a = json.loads(r["data"])
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             a = dict(r)
         articles.append(a)
     db.close()
